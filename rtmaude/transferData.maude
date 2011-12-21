@@ -1,0 +1,213 @@
+--- -------------
+*** Transfer data
+--- -------------
+
+***(  ******************
+
+A function transferData is called when data should be transfered
+from the ultimate source output to the ultimate destination input.
+   We first use a function initializeTransfer which for each thread
+output data port, if the content is noMsg, it leaves it as it is,
+but if it is data[I] or data[B] there, it adds a 'transfer' mark:
+transfer[data[34]]. Likewise each thread input port is initilaized
+to the fresh flag set to false; the content is not touched. 
+   We then use the usual equations to move the transfer messages
+up, down or sideways, until their destinations are reached.
+
+Remark 1: This function is specially defined for our setting,
+with env plus deterministic threads, and therefore treats delayed and
+immediate connections the same!
+
+Remark 2: In the single rewrite rule, there are some functions that
+should be applied sequentially; e.g., applyTransitions should only
+apply when all data have been ransfered to their ultimate destinations.
+To achieve that sequentiality, we could, as in our Ptolemy approach,
+use sort and supersorts, and careful use of variables to ensure the
+desired effect. However, I think that in our current case, using
+operator evaluation strategies might be slightly more elegant,
+so we do not do the sorting approach here.
+
+Remark 3: Jose would like to optimize the moving of messages a little bit
+by having a memo-ized table that for each port gives its destinations,
+and the path there, using also arrows 'up' 'down' and sideways', to make
+this movement of messages more efficient, and then add to each message its
+path, and then do the moving. We might do this optimization soon. 
+But let's first get the thing working.
+
+)*** *********************
+
+(omod TRANSFER-DATA is 
+
+ including BASIC-SORTS .      --- Definition of ConnectionSet
+ including THREAD-PORTS .
+ including COMPONENT .
+ including THREAD .
+
+ op transferData : Configuration -> Configuration [strat (1 0)] .
+ --- main function; frozen should not be needed.
+
+ vars C C1 C2 : ComponentId .
+ vars P P1 P2 : PortId .
+ var PN : PortName .
+ vars PORTS PORTS2 OBJECTS : Configuration .
+ vars MC MC' : MsgContent .
+ var CONXS : ConnectionSet .
+ vars REST COMPONENTS : Configuration .
+ var I : Int .
+ var B : Bool .
+
+ op initializeTransfer : Configuration -> Configuration .
+ --- better name for the above!
+
+ eq transferData(COMPONENTS) = initializeTransfer(COMPONENTS) .
+
+ op transfer : MsgContent -> MsgContent [ctor] .
+ --- the flag that makes the equations move the data.
+
+ --- Initialize:
+ eq initializeTransfer(< C : Component | features : PORTS,
+                                         subcomponents : COMPONENTS >
+                       REST)
+  = < C : Component | features : initializeTransfer(PORTS),
+                      subcomponents : initializeTransfer(COMPONENTS) >
+    initializeTransfer(REST) .
+
+ --- now for ports:
+ eq initializeTransfer(< P : InDataThreadPort | >  PORTS)
+  = < P : InDataThreadPort | fresh : false >
+    initializeTransfer(PORTS) .
+
+ eq initializeTransfer(< P : OutDataPort | content : data(I) >  
+                       PORTS)
+  = < P : OutDataPort | content : transfer(data(I)) > 
+    initializeTransfer(PORTS) .
+
+ eq initializeTransfer(< P : OutDataPort | content : data(B) >  
+                       PORTS)
+  = < P : OutDataPort | content : transfer(data(B)) > 
+    initializeTransfer(PORTS) .
+        
+ eq initializeTransfer(REST) = REST [owise] .
+ --- covers both the empty configuration and non-thread ports and
+ --- thread ports that need not change due to lack of output to transfer.
+
+
+ --- Now, the equations to move messages:
+
+ *** Connections of the form inport --> subcomponent . inport.
+ --- I am not sure, but assume that we can 1-to-many connections
+ --- of these as well. Notice that one-to-many connections,
+ --- at least in the active standby example, are just declared
+ --- as multiple single connections P --> P1 ; P --> P2, etc.  
+  
+ *** Assumptions:
+ --- 1. There is no connection from inport p to outport p1 in the same
+ ---    component. Does not seem to make much sense for data ports!
+ --- 2. The content is only transfered if there is at least one connection
+ ---    going out from the source! 
+
+ eq < C : Component | features : 
+                       < P : InDataPort | content : transfer(MC) > PORTS,
+                      subcomponents : COMPONENTS, 
+                      connections : (P --> C1 . P1) ; CONXS  >
+  =
+    < C : Component | features :  
+                        < P : InDataPort | content : noMsg >  PORTS,
+                      subcomponents : 
+                         (transfer MC from P to COMPONENTS 
+                          using ((P --> C1 . P1) ; CONXS)) > .
+
+ op transfer_from_to_using_ : MsgContent PortName Configuration 
+                              ConnectionSet -> Configuration .
+
+ --- Notice 'InPort' here. Never connection to subcomponent . outport!
+ eq transfer MC from PN to 
+        (< C : Component | features : < P : InDataPort | >   PORTS >  
+         COMPONENTS) 
+    using ((PN --> C . P) ; CONXS) 
+  =
+    transfer MC from PN to 
+     (< C : Component | features : 
+                        < P : InDataPort | content : transfer(MC) > PORTS >
+      COMPONENTS) 
+    using CONXS . 
+
+
+ *** Connections of the form subcomponent . outport --> outport  and
+ ---                   subcomponent1 . outport --> subcomponent2 . inport
+
+ eq < C : Component | 
+       features : PORTS,
+       subcomponents : 
+         < C1 : Component | 
+             features : 
+               < P1 : OutDataPort | content : transfer(MC) > PORTS2 >
+         COMPONENTS, 
+       connections : (C1 . P1 --> PN) ; CONXS  >
+     =
+    < C : Component | features : (transfer MC from (C1 . P1) to PORTS
+                                  using ((C1 . P1 --> PN) ; CONXS)),
+                      subcomponents : 
+                        < C1 : Component | 
+                            features : 
+                              < P1 : OutDataPort | content : noMsg >
+                              PORTS2 >
+                        (transfer MC from (C1 . P1) to COMPONENTS
+                         using ((C1 . P1 --> PN) ; CONXS))  > .
+
+ eq transfer MC from PN to (< P : OutDataPort | > PORTS)
+    using (PN --> P) ; CONXS 
+  = < P : OutDataPort | content : transfer(MC) >
+    transfer MC from PN to PORTS using CONXS .
+
+ *** Same thing, with delayed connections:
+ eq < C : Component | 
+       features : PORTS,
+       subcomponents : 
+         < C1 : Component | 
+             features : 
+               < P1 : OutDataPort | content : transfer(MC) > PORTS2 >
+         COMPONENTS, 
+       connections : (C1 . P1 -->> PN) ; CONXS  >
+     =
+    < C : Component | features : (transfer MC from (C1 . P1) to PORTS
+                                  using CONXS),
+                      subcomponents : 
+                        < C1 : Component | 
+                            features : 
+                              < P1 : OutDataPort | content : noMsg >
+                              PORTS2 >
+                        (transfer MC from (C1 . P1) to COMPONENTS
+                         using ((C1 . P1 -->> PN) ; CONXS))  > .
+
+ eq transfer MC from PN to 
+        (< C : Component | features : < P : InDataPort | >   PORTS >  
+         COMPONENTS) 
+    using ((PN -->> C . P) ; CONXS) 
+  =
+    transfer MC from PN to 
+     (< C : Component | features : 
+                        < P : InDataPort | content : transfer(MC) > PORTS >
+      COMPONENTS) 
+    using CONXS . 
+
+
+ *** Notice: OWISE equation!
+ eq transfer MC from PN to OBJECTS using CONXS = OBJECTS [owise] . 
+
+
+ *** Finally, a message has arrived at its destination:
+ 
+ eq < C : Thread | features : 
+                     < P : InDataThreadPort | content : transfer(MC) >
+                     PORTS >
+   =
+    < C : Thread | features : 
+                     < P : InDataThreadPort | content : MC, fresh : true >
+                     PORTS > .
+ --- Notice that this one can VERY easily be modified if an input
+ --- to a thread can be connected to something. Just a trivial additional
+ --- test if there is a connection from P.
+endom)
+
+

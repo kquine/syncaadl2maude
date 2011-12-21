@@ -1,0 +1,235 @@
+*** Defines a first version of the "grammar" of a "program"
+*** in the behavioral annex. This is a fairly simple first version
+*** that should probably, like most of this interpreter,
+*** be extended in the future to cover larger fragments of AADL.
+
+*** Some things not covered:
+*** --- First of all, this is intended for the synchrnous AADL,
+*** se we do not have nontrivial dispatch conditions. This is
+*** very easily extended to aperiodic and other kinds of 
+*** dispatch conditions.
+*** --- We have not dwelt much on the Data Modeling Annex
+*** or more predefined types, so we assume only Boolean and Integers
+*** as the domain for the state variables.
+*** --- We do not include yet 'final' states, since threads probably
+*** should not just terminate. 
+*** --- Transition priorities have not been implemented yet.
+*** --- Finally, we do not yet handle subprograms. 
+
+(omod BEHAVIOR-LANGUAGE is
+  pr BASIC-SORTS .
+  pr INT .
+
+  --- 'BoolExpression' and 'IntExpression'
+  sorts BoolVarId IntVarId .   
+  sorts BoolExpression IntExpression .
+  subsort BoolVarId Bool < BoolExpression .
+  subsort IntVarId Int < IntExpression .
+  op fresh : PortId -> BoolExpression [ctor] .    --- p'fresh
+
+  op _=_ : IntExpression IntExpression -> BoolExpression [ctor] .
+  op _>=_ : IntExpression IntExpression -> BoolExpression [ctor ditto] .
+  op _>_ : IntExpression IntExpression -> BoolExpression [ctor ditto] .
+  op _<=_ : IntExpression IntExpression -> BoolExpression [ctor ditto] .
+  op _<_ : IntExpression IntExpression -> BoolExpression [ctor ditto] .
+  op _!=_ : IntExpression IntExpression -> BoolExpression [ctor] .
+
+  *** Unfortunately, cannot have PortId < IntExpression BoolExpression,
+  *** so we must define the expressions explicitly ...
+  op _=_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _=_ : IntExpression PortId -> BoolExpression [ctor] .
+  op _>=_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _>=_ : IntExpression PortId -> BoolExpression [ctor] .
+  op _>_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _>_ : IntExpression PortId -> BoolExpression [ctor] .
+  op _<=_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _<=_ : IntExpression PortId -> BoolExpression [ctor] .
+  op _<_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _<_ : IntExpression PortId -> BoolExpression [ctor] .
+  op _!=_ : PortId IntExpression -> BoolExpression [ctor] .
+  op _!=_ : IntExpression PortId -> BoolExpression [ctor] .
+
+  op _-_ : IntExpression IntExpression -> IntExpression [ctor ditto] .
+  op _+_ : IntExpression IntExpression -> IntExpression [ctor ditto] .
+
+  *** Bool expressions also now much heavier ...
+  op _=_ : PortId Bool -> BoolExpression [ctor] . 
+  op _=_ : BoolVarId Bool -> BoolExpression [ctor] .
+
+  *** Must also define boolean operations on BoolExpressions:
+  op _and_ : BoolExpression BoolExpression -> BoolExpression [ctor ditto] .
+  op _or_ : BoolExpression BoolExpression -> BoolExpression [ctor ditto] .
+  op not_ : BoolExpression -> BoolExpression [ctor ditto] .
+  
+
+  --- Behaviro actions!!
+  --- ----------------------
+
+  ***(
+   The behavior actions that the transitions execute are either a set
+   or a sequence of actions. Since we target deterministic
+   threads, we do not consider sets of actios at the moment. 
+
+   Basic actions are assignment of values to variables/ports,
+   and explicit sending of ports, which we do not consider here,
+   since we have a fixed communication pattern in Synch AADL. 
+
+   There are also two basic timing features. A sequence of behaviors
+   may have a timeout. Since we assume instantaneous exeuction,
+   we do not consider this. Also, there is the computation[r1, r2]
+   action, which we also do not consider for the same reason. 
+
+   We then have the if_elseif*_else_? action, with zero or more 
+   elseif's and zero or one else-branch, as well as the usual while
+   action.  
+  )***
+
+  sort Statement .
+  op _:=_ : IntVarId IntExpression -> Statement [ctor] .
+  op _:=_ : BoolVarId BoolExpression -> Statement [ctor] .
+  op _:=_ : PortId IntExpression -> Statement [ctor] .
+  op _:=_ : PortId BoolExpression -> Statement [ctor] .
+  op _:=_ : PortId PortId -> Statement [ctor] .
+  op _:=_ : IntVarId PortId -> Statement [ctor] .
+  op _:=_ : BoolVarId PortId -> Statement [ctor] .
+
+  sort StatementList .
+  op nil : -> StatementList [ctor] .
+  subsort Statement < StatementList .
+  op _;_ : StatementList StatementList -> StatementList 
+                                    [ctor assoc id: nil] .
+
+  op if`(_`)_end`if : BoolExpression StatementList -> Statement [ctor] .
+  op if`(_`)_else_end`if : BoolExpression StatementList 
+                           StatementList -> Statement [ctor] .
+  op if`(_`)__end`if : BoolExpression StatementList ElseIfs
+                       -> Statement [ctor] .
+  op if`(_`)__else_end`if : BoolExpression StatementList ElseIfs
+                           StatementList -> Statement [ctor] .
+
+  sort ElseIfs .
+  op __ : ElseIfs ElseIfs -> ElseIfs [ctor assoc] .
+  op elsif`(_`)_ : BoolExpression StatementList -> ElseIfs [ctor] .
+
+  op while`(_`)`{_`} : BoolExpression StatementList -> Statement [ctor] .
+endom)
+
+
+(omod BEHAVIOR-PROG is 
+  inc BEHAVIOR-LANGUAGE .
+  inc COMPONENT-REF .
+
+---
+--- NOTE: programs should typically be defined with 
+--- initial: L states and NOT current state, as an equation 
+--- takes care of that, while the same syntactic sugaring
+--- is not done for the rest.
+
+*** the translation requires every variable to be initialized!!
+
+  var CR : ComponentRef .  var SL : StatementList .
+  vars L L1 L2 : Location .  vars LS LS1 LS2 : LocationSet .  
+  var LDS : LocationDeclSet .
+
+--- aadl-interface: 
+  ---to get behavior fragments from declarations
+  --- to generate state variables from declarations
+
+  op stateVariables : ComponentRef ~> Valuation .
+  op transitions : ComponentRef ~> TransitionSet [memo] .
+  op states : ComponentRef ~> LocationDeclSet [memo] .
+
+  --- state lookup ops
+  op initialState : ComponentRef ~> Location .
+  op completeStates : ComponentRef ~> LocationSet .
+
+  --- assume only 1 initial state.
+  ceq initialState(CR) = L if (initial: L) LDS := states(CR) .
+  ceq completeStates(CR) = LS if (complete: LS) LDS := states(CR) .
+
+--- state variables
+  *** Store: variables and variable assignments. As mentioned, in a 
+  *** first version we asume that state variables range over the 
+  *** unbounded integers and the Booleans.
+
+  sort VarAssignment .
+  op _|->_ : IntVarId Int -> VarAssignment [ctor] .  
+  op _|->_ : BoolVarId Bool -> VarAssignment [ctor] . 
+
+  sort Valuation .    --- set of variable assignments
+  op emptyValuation : -> Valuation [ctor] .
+  subsort VarAssignment < Valuation .
+  op __ : Valuation Valuation -> Valuation 
+                            [ctor assoc comm id: emptyValuation] .
+
+--- Locations and location sets:
+
+  sort Location . ---  EMPTY SORT! Defined by code-gen
+
+  sort LocationSet .
+  subsort Location < LocationSet .
+  op emptyLocationSet : -> LocationSet [ctor] .
+  op __ : LocationSet LocationSet -> LocationSet 
+                     [ctor assoc comm id: emptyLocationSet] .
+
+  *** NEW, to accomodate Artur!
+  sorts LocationDecl LocationDeclSet .
+  subsort LocationDecl < LocationDeclSet .
+  ops initial:_ : Location -> LocationDecl [ctor] .
+  ops complete:_ other:_ : LocationSet -> LocationDecl [ctor] .
+  op noLocDecl : -> LocationDeclSet [ctor] .
+  op __ : LocationDeclSet LocationDeclSet -> LocationDeclSet
+                                [ctor assoc comm id: noLocDecl] .
+
+  ceq complete: LS1 complete: LS2 = complete: (LS1 LS2) 
+      if LS1 =/= emptyLocationSet and LS2 =/= emptyLocationSet .
+  ceq other: LS1 other: LS2 = other: (LS1 LS2) 
+      if LS1 =/= emptyLocationSet and LS2 =/= emptyLocationSet .
+
+
+  *** Transitions
+  --- ----------------------------
+
+  sort Transition .
+
+  op _-`[_`]->_`{_`} : Location TransGuard Location StatementList 
+                                             -> Transition [ctor] .
+  sort TransitionSet .
+  subsort Transition < TransitionSet .
+  op emptyTransitionSet : -> TransitionSet [ctor] .
+  op _;_ : TransitionSet TransitionSet -> TransitionSet
+                          [ctor assoc comm id: emptyTransitionSet] .
+
+  --- GUARDS for transitions
+  --- --------------------------------
+
+  ***( 
+   This is significantly changed from version 1 of the BehAnnex.
+   Transitions out of complete states have dispatch-conditions,
+   which typically is a condition on how the thread was dispatched,
+   'on dispatch p' or 'on dispatch timeout', etc. Since we assume
+   in the synchronous AADL that we only have periodic threads,
+   these dispatch conditions are fairly void, e.g., only
+   'on dispatch'.
+      The conditions on transitions going from non-complete,
+   so-called execution, states are now basically just Boolean
+   expressions with some additional stuff. We might well include
+   'otherwise' here, even though it will cause us some problems. 
+  )*** 
+
+
+  sort TransGuard .
+
+  --- Dispatch guards:
+  op on`dispatch : -> TransGuard [ctor] .
+
+  --- Execution guards:
+  subsort BoolExpression < TransGuard .
+  op otherwise : -> TransGuard [ctor] .  
+  --- 'empty' is also an execution guard:
+  op _-`[`]->_`{_`}  : Location  Location StatementList -> Transition .
+  eq L1 -[]-> L2 {SL} = L1 -[ true ]-> L2 {SL} .
+
+
+endom)
+

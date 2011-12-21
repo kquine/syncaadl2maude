@@ -1,0 +1,24 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: AADL Maude Plug-in
+Bundle-SymbolicName: edu.uiuc.aadl.maude; singleton:=true
+Bundle-Version: 1.0.0
+Bundle-Activator: edu.uiuc.aadl.maude.Activator
+Bundle-Vendor: UIUC
+Require-Bundle: org.eclipse.ui,
+ org.eclipse.ui.ide,
+ org.eclipse.ui.editors,
+ org.eclipse.ui.forms,
+ org.eclipse.core.resources,
+ org.eclipse.core.runtime,
+ org.eclipse.jface.text,
+ org.eclipse.emf.ecore.xmi,
+ org.eclipse.emf.common.ui,
+ edu.cmu.sei.osate.workspace,
+ edu.cmu.sei.aadl.model,
+ edu.cmu.sei.aadl.annex,
+ org.topcased.aadl.behavior,
+ edu.cmu.sei.osate.ui,
+ edu.cmu.sei.aadl.unparser,
+ es.upv.dsic.issi.moment.mdt.maudesimpleGUI
+Eclipse-LazyStart: true

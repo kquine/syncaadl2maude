@@ -1,0 +1,99 @@
+*** This module defines the "main function" that applies transitions
+*** in all NON-ENVIRONMENT threads in a synchronous step.
+
+*** It is assumed that there is one environment thread that it 
+*** defined to be environment thread and that is NOT deterministic.
+*** All other threads are assumed to be explicitly declared to be deterministic. 
+
+*** It is a little same for us, but we assume in this semantics that 
+*** there MUST be an enabled transition each time a thread is dispatched.
+*** It is trivial to change the semantics so that a lack of enabled transition
+*** just means that that component does nothing in the round.
+*** Therefore, at the moment, the main function, applyTransitions,
+*** is a partial function.
+
+*** Transitions not explicitly represented.
+
+
+
+(tomod EXECUTE-THREADS is 
+  including THREAD .
+  including EXEC-TRANS .
+  protecting EXT-BOOL .
+  including SYSTEM .
+  including PROCESS .
+  including AADL-PROPERTIES .
+
+  var CR : ComponentRef .
+  var LDS : LocationDeclSet .
+  var O : Oid .
+  vars PORTS NEW-PORTS CONF1 CONF2 COMPONENTS : Configuration .
+  var P : PortId .
+  vars L L1 L2 : Location .
+  vars LS LS1 LS2 : LocationSet .
+  var GUARD : TransGuard .  
+  vars VAL NEW-VALUATION : Valuation .
+  var TRANSITIONS TRANSES : TransitionSet .
+  var SL : StatementList .
+  vars TP PROPS : Properties .
+
+  op applyTransitions : Configuration ~> Configuration [strat (1 0)] .
+  --- Notice that is partial, so that advance is stopped when a transition 
+  --- cannot be aplied in some thread.
+
+  *** Distribute down to threads:
+  eq applyTransitions(< O : System | subcomponents : COMPONENTS >) 
+   = < O : System | subcomponents : applyTransitions(COMPONENTS) > .
+
+  eq applyTransitions(< O : Process | subcomponents : COMPONENTS >) 
+   = < O : Process | subcomponents : applyTransitions(COMPONENTS) > .
+ 
+  ceq applyTransitions(CONF1 CONF2) = applyTransitions(CONF1) applyTransitions(CONF2)
+        if CONF1 =/= none and CONF2 =/= none .
+
+  *** Threads: environment thread is not executed by this one:
+  eq applyTransitions(< O : Thread | properties : (IsEnvironment(true) ; PROPS) >) 
+   = < O : Thread | > .
+
+  *** Now, we come to deterministic thread, which should be executed. We do not check
+  *** for environment, because IF the envirnment is deterministic, then MAYBE it should
+  *** be executed here. 
+
+  ceq applyTransitions(
+        < O : Thread | properties : Deterministic(true) ; PROPS, 
+                       features : PORTS, 
+		       currState : L1,
+		       completeStates : LS,
+		       variables : VAL,
+		       behaviorRef : CR >)
+   = if L2 in LS then   --- done!
+        < O : Thread | features :  NEW-PORTS, 
+	               currState : L2,
+		       variables : NEW-VALUATION >
+     else        --- not a complete state: continue!
+       applyTransitions(< O : Thread | features :  NEW-PORTS, 
+                                       currState : L2,
+                                       variables : NEW-VALUATION >)
+     fi
+   if ((L1 -[ GUARD ]-> L2 {SL})  ; TRANSITIONS) := transitions(CR)
+         /\ evalGuard(GUARD, PORTS, VAL) 
+         /\ GUARD =/= otherwise or-else 
+             not someTransEnabled(TRANSITIONS, L1, VAL, PORTS)
+         /\ transResult(NEW-PORTS, NEW-VALUATION) :=
+              executeTransition( L1 -[ GUARD ]-> L2 {SL}, PORTS, VAL) .
+
+  op environmentThread : Properties -> Bool .
+  eq environmentThread(IsEnvironment(true) ; PROPS) = true .
+  eq environmentThread(PROPS) = false [owise] .
+
+  op someTransEnabled : TransitionSet Location Valuation Configuration -> Bool .
+  eq someTransEnabled((L1 -[ GUARD ]-> L2 {SL})  ; TRANSITIONS, L, VAL, PORTS) 
+   = if L == L1 and evalGuard(GUARD, PORTS, VAL) then true
+     else someTransEnabled(TRANSITIONS, L, VAL, PORTS) fi .
+
+ eq someTransEnabled(emptyTransitionSet, L, VAL, PORTS) = false .
+
+  op _in_ : Location LocationSet -> Bool .
+  eq L in L LS = true .
+  eq L in LS = false [owise] .
+endtom)

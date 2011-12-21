@@ -1,0 +1,59 @@
+ 
+***( Attributes:
+       - features: a set of ports, inherited from Component
+       - subcomponents, mostly none, inherited from Component
+       - connection, inherited from Component
+       - properties: this is the dispatch policy, so far only periodic
+                     -- may also be input constraints
+)***
+
+--- Defines the basic class.
+(omod COMPONENT is 
+  including BASIC-SORTS .
+
+  class Component | features : Configuration,    --- PORT objects!
+                    properties : Properties, 
+                    subcomponents : Configuration, 
+                    connections : ConnectionSet .
+
+  --- properties
+  sorts Property Properties .
+  subsort Property < Properties .
+  op noProperty : -> Properties [ctor] .
+  op _;_ : Properties Properties -> Properties 
+                                    [ctor assoc comm id: noProperty] .
+
+  --- Connections: immediate and delayed connections
+  sort Connection .      
+  ops _-->_  _-->>_ : PortName PortName -> Connection [ctor] .
+
+  sort ConnectionSet .
+  subsort Connection < ConnectionSet . 
+  op none : -> Connection [ctor] .
+  op _;_ : ConnectionSet ConnectionSet -> ConnectionSet
+                                          [ctor assoc comm id: none] .
+
+endom)
+
+(omod SYSTEM is including COMPONENT .
+  class System .       subclass System < Component .
+endom)
+
+
+(omod PROCESS is including COMPONENT .
+  class Process .       subclass Process < Component .
+endom)
+
+(tomod THREAD is
+  including COMPONENT .
+  including BEHAVIOR-PROG . 
+  including THREAD-PORTS .
+
+  class Thread | behaviorRef : ComponentRef,     --- to retrieve transitions
+                 variables : Valuation,	         --- behavior state variables
+                 currState : Location,           --- behavior current state
+                 completeStates : LocationSet .  --- behavior complete states
+  subclass Thread < Component .
+
+endtom)
+

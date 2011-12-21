@@ -1,0 +1,44 @@
+
+--- defining aadl properties
+
+(omod AADL-PROPERTIES is
+  including TIME-DOMAIN .
+  including COMPONENT .
+  including BEHAVIOR-LANGUAGE .
+
+*** Some SynchAADL properties:
+  sort SynchAADLProperty .
+  subsort SynchAADLProperty < Property .
+
+  --- NOTE: instead of the constant synchronous, the following function symbol is used.
+  ---op synchronous : -> SynchAADLProperty [ctor] .
+  
+  op Synchronous : Bool -> SynchAADLProperty [ctor] .
+  op syncPeriod : Time -> SynchAADLProperty [ctor] .
+
+  op Deterministic : Bool -> Property [ctor] .
+
+  --- Environment properties; will be dealt with more thouroughly later:
+  op IsEnvironment : Bool -> Property [ctor] . 
+  op InputConstraints : BoolExpression -> Property [ctor] .
+---  op InputConstraints : String -> Property [ctor] .
+
+*** Dispatch methods
+  sort DispatchMethod .
+  subsort DispatchMethod < Property .
+
+  *** op aperiodic-dispatch : -> DispatchMethod [ctor] .
+  op periodic-dispatch : Time -> DispatchMethod [ctor] .
+  --- Mostly "cosmetic" in SYNC-AADL.
+
+
+  --- Dispatch:
+  sort ADispatchMethod .
+  op Periodic : -> ADispatchMethod .
+  op DispatchProtocol : ADispatchMethod -> Property .
+
+  op Period : Time -> Property .
+  eq (DispatchProtocol(Periodic) ; Period(T:Time)) =
+     periodic-dispatch(T:Time) .
+
+endom)

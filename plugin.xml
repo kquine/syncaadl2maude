@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.editors">
+      <editor
+            name="AADL Maude Property Editor"
+            extensions="prop"
+            icon="icons/sample.gif"
+            contributorClass="edu.uiuc.aadl.maude.editors.RtmAadlPropertyEditorContributor"
+            class="edu.uiuc.aadl.maude.editors.RtmAadlPropertyEditor"
+            id="edu.uiuc.aadl.maude.editors.RtmAadlPropertyEditor">
+      </editor>
+   </extension>
+   <extension
+         point="org.eclipse.ui.newWizards">
+      <category
+            name="AADL Maude Property Wizards"
+            id="edu.uiuc.aadl.maude">
+      </category>
+      <wizard
+            name="AADL Maude Property Editor file"
+            icon="icons/sample.gif"
+            category="edu.uiuc.aadl.maude"
+            class="edu.uiuc.aadl.maude.wizards.RtmAadlPropertyWizard"
+            id="edu.uiuc.aadl.maude.wizards.RtmAadlPropertyWizard">
+      </wizard>
+   </extension>
+   
+<extension
+         point="org.eclipse.ui.popupMenus">
+       <objectContribution
+            objectClass="org.eclipse.core.resources.IFile"
+            id="edu.uiuc.aadl.maude.ui.contribution1">
+         <menu
+               label="AADL Maude"
+               path="additions"
+               id="edu.uiuc.aadl.maude.menu1">
+            <separator
+                  name="group1">
+            </separator>
+         </menu>
+         
+         <action
+               label="Real-Time Maude Model Specification"
+               class="edu.uiuc.aadl.maude.GenerateRTMAction"
+               menubarPath="edu.uiuc.aadl.maude.menu1/group1"
+               enablesFor="1"
+               id="edu.uiuc.aadl.maude.GenerateRTMAction">
+         </action>
+         
+      </objectContribution>
+   </extension>
+
+</plugin>

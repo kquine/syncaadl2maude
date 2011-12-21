@@ -1,0 +1,67 @@
+*** Here are the main rules!
+
+(tomod SYNCHRONOUS-STEP is
+  including APPLY-ENV-TRANS .
+  including TRANSFER-DATA .
+
+  vars SYSTEM OBJ : Object .     
+  var VAL : Valuation . 
+  var VALS : ValuationSet .
+  var NZT : NzTime .
+  var O : Oid .
+  var PROPS : Properties .
+  var COMPONENTS CONF : Configuration .
+
+
+---
+  crl [syncStepWithTime] :
+      {SYSTEM}               --- top-level object
+     =>
+      {applyTransitions(transferData(applyEnvTransitions(VAL, SYSTEM)))}
+     in time period(SYSTEM)
+     if containsEnvironment(SYSTEM)
+        /\ VAL ;; VALS := allEnvAssignments(SYSTEM) .
+
+
+  crl [syncStepWithTimeNoEnv] :
+      {SYSTEM} 
+     =>
+      {applyTransitions(transferData(SYSTEM))}
+     in time period(SYSTEM) 
+     if not containsEnvironment(SYSTEM) .
+---
+
+  op period : Configuration -> Time .
+  --- We assume that all perids are the same, but it period may be declared
+  --- in different places, either explicitly at the top level, or impicitly
+  --- by the period in some thread.  
+  eq period(< O : Component | properties : syncPeriod(NZT) ; PROPS >) = NZT .
+  eq period(< O : Thread | properties : periodic-dispatch(NZT) ; PROPS >) = NZT .
+  eq period(< O : Component | subcomponents : COMPONENTS >) =
+       period(COMPONENTS) [owise] .
+  ceq period(OBJ CONF) = if period(OBJ) == 0 then period(CONF) else period(OBJ) fi 
+         if CONF =/= none .
+  eq period(none) = 0 .   --- default value
+
+
+  *** Although the above are the most correct rules, in the present fragment we might
+  *** disregard from the actual periods, since they are constants anyways; this also
+  *** saves the longer 'period(SYSTEM)' computations:
+
+ ---(
+  crl [syncStepWithTimeNoTime] :
+      {SYSTEM} 
+     =>
+      {applyTransitions(transferData(applyEnvTransitions(VAL, SYSTEM)))}
+     if containsEnvironment(SYSTEM)
+        /\ VAL ;; VALS := allEnvAssignments(SYSTEM) .
+
+
+  crl [syncStepWithTimeNoEnvNoTime] :
+      {SYSTEM} 
+     =>
+      {applyTransitions(transferData(SYSTEM))}
+     if not containsEnvironment(SYSTEM) .
+ ---)
+
+endtom)

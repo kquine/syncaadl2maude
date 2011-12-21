@@ -1,0 +1,191 @@
+*** Execute a transition.
+
+
+(omod EXEC-TRANS is
+  including BEHAVIOR-PROG .
+  including THREAD-PORTS .
+
+  vars P P1 P2 : PortId .
+  vars BE BE2 BE3 BEXP1 BEXP2 : BoolExpression .
+  var VAL : Valuation .
+  var PORTS : Configuration . 
+  vars B B2 : Bool .
+  var BVAR : BoolVarId .
+  vars IE E1 E2 : IntExpression .
+  var I : Int .
+  var IVAR : IntVarId .
+  var GUARD : TransGuard .
+  vars L1 L2 : Location .
+  vars SL SL1 SL2 SL3 SL4 : StatementList .
+  var ELSIFS : ElseIfs .
+
+  --- Evaluate transition guards:
+  op evalGuard : TransGuard Configuration Valuation ~> Bool .
+
+  eq evalGuard(BE, PORTS, VAL) = evalBoolExpression(BE, VAL, PORTS) .
+  eq evalGuard(otherwise, PORTS, VAL) = true .     *** Be aware of this one!
+  eq evalGuard(on dispatch, PORTS, VAL) = true .
+
+  --- Evaluate boolean expressions:
+  op evalBoolExpression : BoolExpression Valuation Configuration ~> Bool .
+
+  eq evalBoolExpression(B, VAL, PORTS) = B .
+  eq evalBoolExpression(BVAR, (BVAR |-> B) VAL, PORTS) = B .
+  eq evalBoolExpression(fresh(P), VAL, < P : InDataThreadPort | fresh : B >  PORTS) = B .
+
+  eq evalBoolExpression(E1 = E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) == evalIntExpression(E2, VAL)) .
+  eq evalBoolExpression(E1 <= E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) <= evalIntExpression(E2, VAL)) .
+  eq evalBoolExpression(E1 < E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) < evalIntExpression(E2, VAL)) .
+  eq evalBoolExpression(E1 >= E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) >= evalIntExpression(E2, VAL)) .
+  eq evalBoolExpression(E1 > E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) > evalIntExpression(E2, VAL)) .
+  eq evalBoolExpression(E1 != E2, VAL, PORTS) = 
+      (evalIntExpression(E1, VAL) =/= evalIntExpression(E2, VAL)) .
+  
+  eq evalBoolExpression(P = IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) == evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE = P, VAL, PORTS) = evalBoolExpression(P = IE, VAL, PORTS) .
+  eq evalBoolExpression(P >= IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) >= evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE >= P, VAL, PORTS) = evalBoolExpression(P <= IE, VAL, PORTS) .
+  eq evalBoolExpression(P > IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) > evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE > P, VAL, PORTS) = evalBoolExpression(P < IE, VAL, PORTS) .
+  eq evalBoolExpression(P <= IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) <= evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE <= P, VAL, PORTS) = evalBoolExpression(P >= IE, VAL, PORTS) .
+  eq evalBoolExpression(P < IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) <= evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE < P, VAL, PORTS) = evalBoolExpression(P > IE, VAL, PORTS) .
+  eq evalBoolExpression(P != IE, VAL, PORTS) =
+      (intFromPort(P, PORTS) =/= evalIntExpression(IE, VAL)) . 
+  eq evalBoolExpression(IE != P, VAL, PORTS) = evalBoolExpression(P != IE, VAL, PORTS) .
+
+  eq evalBoolExpression(P = B, VAL, PORTS) = boolFromPort(P, PORTS) == B .
+  eq evalBoolExpression(BVAR = B, (BVAR |-> B2) VAL, PORTS) = (B == B2) .
+
+  ceq evalBoolExpression(BEXP1 and BEXP2, VAL, PORTS) =
+        (evalBoolExpression(BEXP1, VAL, PORTS) and evalBoolExpression(BEXP2, VAL, PORTS))
+      if not (BEXP1 :: Bool and BEXP2 :: Bool) .
+  ceq evalBoolExpression(BEXP1 or BEXP2, VAL, PORTS) =
+        (evalBoolExpression(BEXP1, VAL, PORTS) or evalBoolExpression(BEXP2, VAL, PORTS))
+      if not (BEXP1 :: Bool and BEXP2 :: Bool) .
+  ceq evalBoolExpression(not BEXP1, VAL, PORTS) =
+         not evalBoolExpression(BEXP1, VAL, PORTS) 
+      if not (BEXP1 :: Bool) .
+
+  op evalIntExpression : IntExpression Valuation ~> Int .
+
+  eq evalIntExpression(IVAR, (IVAR |-> I) VAL) = I .
+  eq evalIntExpression(I, VAL) = I .
+  eq evalIntExpression(E1 - E2, VAL) =
+      (evalIntExpression(E1, VAL) - evalIntExpression(E2, VAL)) .
+  eq evalIntExpression(E1 + E2, VAL) =
+      (evalIntExpression(E1, VAL) + evalIntExpression(E2, VAL)) .
+
+
+  *** Execute a transition.
+  --- When the following transition applies, we already know that
+  --- the transition can be taken ... take care with the otherwise
+  --- transition guard, though ...
+
+  --- Need to return:
+  ---   ** new state of ports
+  ---   ** new state of store
+  --- we do not check the new location here ...   
+
+  *** No delay statements, etc, in SYNC-AADL!
+  sort PortsValuation .
+  op transResult : Configuration Valuation -> PortsValuation [ctor] .
+  --- again, above, Configuration stands for the ports ...
+
+  op executeTransition : Transition Configuration Valuation 
+                                                ~> PortsValuation .
+
+  eq executeTransition(L1 -[ GUARD ]-> L2 {SL}, PORTS, VAL) =
+      if evalGuard(GUARD, PORTS, VAL) then
+         executeStatements(SL, PORTS, VAL) 
+      else transResult(PORTS, VAL)
+      fi .
+
+  op executeStatements : StatementList Configuration Valuation ~> 
+                                       PortsValuation [strat (2 3 1 0)] .  --- just to be sure
+
+  eq executeStatements(nil, PORTS, VAL) = transResult(PORTS, VAL) .
+  --- no more statements left to do ...
+
+  eq executeStatements((IVAR := IE) ; SL, PORTS, (IVAR |-> I) VAL) =
+        executeStatements(SL, PORTS, 
+                          (IVAR |-> evalIntExpression(IE, (IVAR |-> I) VAL)) VAL) .
+
+  --- same thing for Boolean assignment:
+  eq executeStatements((BVAR := BE) ; SL, PORTS, (BVAR |-> B) VAL) =
+        executeStatements(SL, PORTS, 
+                          (BVAR |-> evalBoolExpression(BE, (BVAR |-> B) VAL, PORTS)) VAL) .
+
+  eq executeStatements((P := IE) ; SL, PORTS, VAL) =
+        executeStatements(SL, writeData(evalIntExpression(IE, VAL), P, PORTS), VAL) .
+
+  eq executeStatements((P := BE) ; SL, PORTS, VAL) =
+        executeStatements(SL, 
+                          writeData(evalBoolExpression(BE, VAL, PORTS), P, PORTS), 
+                          VAL) .
+
+  --- A little trickier one:
+  ceq executeStatements((P1 := P2) ; SL, PORTS, VAL) =
+        executeStatements(SL, writeData(B, P1, PORTS), VAL) 
+      if B := boolFromPort(P2, PORTS) .
+  ceq executeStatements((P1 := P2) ; SL, PORTS, VAL) =
+        executeStatements(SL, writeData(I, P1, PORTS), VAL) 
+      if I := intFromPort(P2, PORTS) .
+                           
+  eq executeStatements((BVAR := P) ; SL, PORTS, (BVAR |-> B) VAL) =
+        executeStatements(SL, PORTS, 
+                          (BVAR |-> boolFromPort(P, PORTS)) VAL) .
+  eq executeStatements((IVAR := P) ; SL, PORTS, (IVAR |-> I) VAL) =
+        executeStatements(SL, PORTS, 
+                          (IVAR |-> intFromPort(P, PORTS)) VAL) .
+
+  --- The various if-constructs:
+  eq executeStatements((if ( BE ) SL1 end if) ; SL2, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL2, PORTS, VAL) 
+     else executeStatements(SL2, PORTS, VAL) fi .
+
+  eq executeStatements((if ( BE ) SL1 else SL2 end if) ; SL3, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL3, PORTS, VAL) 
+     else executeStatements(SL2 ; SL3, PORTS, VAL) fi .
+
+  --- the elsifs ... there might be a nicer way of doing this ...
+  eq executeStatements((if ( BE ) SL1 (elsif ( BE2 ) SL2) end if) ; SL3, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL3, PORTS, VAL) 
+     else executeStatements((if ( BE2 ) SL2 end if) ; SL3, PORTS, VAL) fi .
+
+  eq executeStatements((if ( BE ) SL1 (elsif ( BE2 ) SL2) else SL3 end if) ; SL4, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL4, PORTS, VAL) 
+     else executeStatements((if ( BE2 ) SL2 else SL3 end if) ; SL4, PORTS, VAL) fi .
+
+  eq executeStatements((if ( BE ) SL1 ((elsif ( BE2 ) SL2) ELSIFS) end if) ; SL3, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL3, PORTS, VAL) 
+     else executeStatements((if ( BE2 ) SL2 ELSIFS end if) ; SL3, PORTS, VAL) fi .
+
+  eq executeStatements((if ( BE ) SL1 ((elsif ( BE2 ) SL2) ELSIFS) else SL3 end if) ; SL4, 
+                       PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; SL4, PORTS, VAL) 
+     else executeStatements((if ( BE2 ) SL2 ELSIFS else SL3 end if) ; SL4, PORTS, VAL) fi .
+
+  --- while loop:
+  eq executeStatements((while ( BE ) {SL1}) ; SL2, PORTS, VAL) =
+     if evalBoolExpression(BE, VAL, PORTS) then 
+        executeStatements(SL1 ; (while ( BE ) {SL1}) ; SL2, PORTS, VAL) 
+     else executeStatements(SL2, PORTS, VAL) fi .
+endom)

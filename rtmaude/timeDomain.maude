@@ -1,0 +1,8 @@
+--- We use the natural numbers, but also include the integers,
+--- to define max to avoid warnings:
+
+(tmod TIME-DOMAIN is 
+  protecting INT .  
+  protecting NAT-TIME-DOMAIN-WITH-INF . 
+  op max : TimeInf Int -> TimeInf [ditto] .
+endtm)

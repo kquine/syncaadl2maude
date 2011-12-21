@@ -1,0 +1,111 @@
+
+(omod PORTS is inc BASIC-SORTS .
+
+  class Port | content : MsgContent .
+
+  sort MsgContent .
+  op noMsg : -> MsgContent [ctor] .
+endom)
+
+--- Data ports.
+
+--- If I understand correctly, ports for threads have all 
+--- kinds of features and internal buffers, while
+--- ports for processes and other kinds of components are just 
+--- used for forwarding stuff. Therefore, we must separate
+--- ports for threads and "interface/forwarding"-ports.
+
+--- Notice that in the synchronous world, we just assume data ports,
+--- and NOT event or event data ports.
+
+--- Elements to be sent.
+--- Data are of two
+--- kinds: Integer and Boolean, so far. Again, I take outmost care
+--- not to confuse these sorts ...
+
+(omod DATA-PORTS is including PORTS .
+
+ op data : Bool -> MsgContent [ctor] .
+ op data : Int -> MsgContent [ctor] .
+
+ --- Ports are represented as objects ...
+
+ --- "Interface" ports. I guess they just need the buffer where messages
+ --- in transit are located. 
+ --- -------------------------------------------------------------------
+
+ class InDataPort .
+ class OutDataPort .
+ subclass InDataPort OutDataPort < Port .
+endom)    --- end PORTS
+
+
+--- Thread ports
+--- ------------
+
+***( 
+  Previously, thread ports had an internal buffer, where
+  we put the content of the buffer at the time of dispatch,
+  i.e., we froze it, so that later data/messages could arrive,
+  while the thread was still working on the dispatch. However,
+  ONLY because we know that we will never receive new data when 
+  dispatched, we do not need this value to be frozen. However,
+  we will need the 'fresh' flag:
+)*** 
+
+
+(omod THREAD-PORTS is 
+  including DATA-PORTS . 
+
+ --- INPUT THREAD PORTS:
+ --- -------------------
+
+ class InDataThreadPort  | fresh : Bool .
+    subclass InDataThreadPort < InDataPort .
+
+ var P : PortId .
+ var PORTS : Configuration .
+ var B : Bool .
+ var I : Int .
+ var MSGC : MsgContent .
+
+ --- Functions on input thread ports
+ --- -------------------------------
+
+ op newMsgInPort : PortId Configuration ~> Bool .
+ eq newMsgInPort(P,  < P : InDataThreadPort | fresh : B >  PORTS) = B .
+ --- no OWISE part, as this should be not called up in vain ...
+
+ op intFromPort : PortId Configuration ~> Int .
+ op boolFromPort : PortId Configuration ~> Bool .
+
+ eq intFromPort(P,  
+                 < P : InDataThreadPort | content : data(I) >
+                 PORTS)
+      = I .
+
+ eq boolFromPort(P,  
+                 < P : InDataThreadPort | content : data(B) >
+                 PORTS)
+      = B .
+
+
+
+ --- OUTPUT PORTS FROM THREADS
+ --- -------------------------
+ --- -------------------------
+
+ --- I cannot so far any reason for NOT using standard ports for the output
+ --- part. 
+
+ op writeData : Bool PortId Configuration ~> Configuration .
+ op writeData : Int PortId Configuration ~> Configuration .
+
+ --- again, sending immediately, no check for errors!!
+ eq writeData(I, P, < P : OutDataPort | >  PORTS)  =
+       < P : OutDataPort | content : data(I) >  PORTS .
+ eq writeData(B, P, < P : OutDataPort | >  PORTS)  =
+       < P : OutDataPort | content : data(B) >  PORTS .
+endom)    --- end THREAD-PORTS
+
+--- What seems to be missing here as the declaration abbreviations ...

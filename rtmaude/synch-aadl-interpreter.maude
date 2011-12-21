@@ -1,0 +1,22 @@
+*** Interpreter for synchrnous subset of AADL. 
+
+load real-time-maude.maude
+
+
+in identifiers
+in ports
+in behProgSyntax
+in components
+in timeDomain
+
+in genEnvInput
+in executeTrans
+in transferData
+
+in aadlProperties
+in applyTransitions
+in applyEnvTransition
+in rules
+
+(set tick max def 10 .)   --- can be overridden by user
+

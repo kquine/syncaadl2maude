@@ -1,0 +1,108 @@
+*** This one first instantiates the variables in an environmentthread according
+*** to the input constraint, and then applies a transition in the environment.
+
+(omod APPLY-ENV-TRANS is 
+  including EXECUTE-THREADS .
+  including GENERATE-ENV-INPUTS .
+
+  var CR : ComponentRef .
+  var LDS : LocationDeclSet .
+  var O : Oid .
+  vars PORTS NEW-PORTS CONF1 CONF2 COMPONENTS : Configuration .
+  var P : PortId .
+  vars L L1 L2 : Location .
+  vars LS LS1 LS2 : LocationSet .
+  var GUARD : TransGuard .  
+  vars VAL OLD-VAL NEW-VALUATION : Valuation .
+  var TRANSITIONS TRANSES : TransitionSet .
+  var SL : StatementList .
+  vars TP PROPS : Properties .
+  var BE : BoolExpression .
+  var BVAR : BoolVarId .
+  var B : Bool .
+
+  op applyEnvTransitions : Valuation Configuration ~> Configuration .
+  --- Notice that is partial, so that advance is stopped when a transition 
+  --- cannot be aplied in some thread.
+
+  *** Distribute down to threads:
+  eq applyEnvTransitions(VAL, < O : System | subcomponents : COMPONENTS >) 
+   = < O : System | subcomponents : applyEnvTransitions(VAL, COMPONENTS) > .
+
+  eq applyEnvTransitions(VAL, < O : Process | subcomponents : COMPONENTS >) 
+   = < O : Process | subcomponents : applyEnvTransitions(VAL, COMPONENTS) > .
+ 
+  ceq applyEnvTransitions(VAL, CONF1 CONF2) 
+    = applyEnvTransitions(VAL, CONF1) applyEnvTransitions(VAL, CONF2)
+        if CONF1 =/= none and CONF2 =/= none .
+
+  *** Threads: non-environment thread is not executed by this one:
+  ceq applyEnvTransitions(VAL, < O : Thread | properties : PROPS >) = < O : Thread | > 
+        if not environmentThread(PROPS) .
+
+  *** Now, we come to environment thread, which should be executed:
+
+  ceq applyEnvTransitions(VAL, 
+        < O : Thread | properties : IsEnvironment(true) ; PROPS, 
+                       features : PORTS, 
+		       currState : L1,
+		       completeStates : LS, 
+		       variables : OLD-VAL,
+		       behaviorRef : CR >)
+   = if L2 in LS then   --- done!
+        < O : Thread | features :  NEW-PORTS, 
+	               currState : L2,
+		       variables : NEW-VALUATION >
+     else        --- not a complete state: continue!
+       applyEnvTransitions(NEW-VALUATION,
+           < O : Thread | features :  NEW-PORTS, 
+	                  currState : L2,
+			  variables : NEW-VALUATION >)
+     fi
+     if ((L1 -[ GUARD ]-> L2 {SL})  ; TRANSITIONS) := transitions(CR)
+         /\ evalGuard(GUARD, PORTS, VAL) 
+         /\ GUARD =/= otherwise or-else 
+             not someTransEnabled(TRANSITIONS, L1, VAL, PORTS)
+         /\ transResult(NEW-PORTS, NEW-VALUATION) :=
+              executeTransition( L1 -[ GUARD ]-> L2 {SL}, PORTS, VAL) .
+
+  *** A main function, that gives all the possible variable assignments in a system:
+  op allEnvAssignments : Configuration ~> ValuationSet .
+  --- assumes ONE environment!
+
+  op containsEnvironment : Configuration -> Bool .
+  eq containsEnvironment(< O : System | subcomponents : COMPONENTS >)
+     = containsEnvironment(COMPONENTS) .
+  eq containsEnvironment(< O : Process | subcomponents : COMPONENTS >)
+     = containsEnvironment(COMPONENTS) .
+  ceq containsEnvironment(CONF1 CONF2) = 
+       containsEnvironment(CONF1) or-else containsEnvironment(CONF2)
+        if CONF1 =/= none and CONF2 =/= none .
+  eq containsEnvironment(< O : Thread | properties : PROPS >) = environmentThread(PROPS) .
+  eq containsEnvironment(none) = false .
+
+  op getEnvironment : Configuration ~> Object .
+    eq getEnvironment(< O : System | subcomponents : COMPONENTS >) 
+   = getEnvironment(COMPONENTS) .
+  eq getEnvironment(< O : Process | subcomponents : COMPONENTS >) 
+   = getEnvironment(COMPONENTS) .
+  ceq getEnvironment(CONF1 CONF2) = 
+       if containsEnvironment(CONF1) then getEnvironment(CONF1) 
+       else getEnvironment(CONF2) fi
+        if CONF1 =/= none and CONF2 =/= none .
+  eq getEnvironment(< O : Thread | properties : IsEnvironment(true) ; PROPS >) 
+   =  < O : Thread | > .
+
+  eq allEnvAssignments(< O : System | subcomponents : COMPONENTS >) =   
+        allEnvAssignments(getEnvironment(COMPONENTS)) .
+
+  eq allEnvAssignments(< O : Thread | properties : IsEnvironment(true) ; InputConstraints(BE) ; TP,
+                                      variables : VAL >)
+   = allAssignments(initializeToFalse(VAL), BE) .
+
+  op initializeToFalse : Valuation ~> Valuation .
+  eq initializeToFalse((BVAR |-> B) VAL) = (BVAR |-> false) initializeToFalse(VAL) .
+  eq initializeToFalse(VAL) = VAL [owise] .
+
+  *** Maybe we should memo the whole thing as a constant? If we have a fixed init state, fine!
+endom)

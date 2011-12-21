@@ -1,0 +1,78 @@
+--- Find all possible valuations satisfying an input constraint
+
+*** Problems in Full Maude: /\ in SAT-SOLVER crashes with 
+*** /\ in conditional rules!
+
+(omod GENERATE-ENV-INPUTS is 
+  inc SAT-SOLVER * (op _|->_ to _|-->_) .
+  inc BEHAVIOR-PROG .
+
+  vars BV BVAR : BoolVarId .
+  vars F F1 F2 : Formula .
+  vars VAL VAL2 : Valuation .
+  var VS : ValuationSet .
+  var B : Bool .
+  vars BE BE1 BE2 : BoolExpression .
+
+  sort ValuationSet .
+
+
+  op formula : BoolVarId -> Formula .
+
+  subsort Valuation < ValuationSet .
+  op emptyVS : -> ValuationSet [ctor] .
+  op _;;_ : ValuationSet ValuationSet -> ValuationSet 
+                         [ctor assoc comm id: emptyVS] .
+  eq VAL ;; VAL = VAL .
+
+  --- substitution:
+  op subst : BoolVarId Formula Formula -> Formula .
+  eq subst(BV, F, ~ F1) = ~ subst(BV, F, F1) .
+  eq subst(BV, F, F1 /\ F2) = subst(BV, F, F1) /\ subst(BV, F, F2) .
+  eq subst(BV, F, F1 \/ F2) = subst(BV, F, F1) \/ subst(BV, F, F2) .
+  eq subst(BV, F, formula(BV)) = F .
+  eq subst(BV, F, F1) = F1 [owise] .
+
+  --- main function: generate assignment sets:
+  op genAssignments : Valuation Valuation Formula -> ValuationSet .
+  --- usage genAssignments(variables assigned to value, 
+  ---                      variables left to be assigned,
+  ---                      formula with substitution)
+
+  eq genAssignments(VAL, (BVAR |-> B) VAL2, F) =
+     (if satSolve(subst(BVAR, False, F)) =/= false then
+      genAssignments(VAL (BVAR |-> false), VAL2, subst(BVAR, False, F))
+      else emptyVS fi)
+        ;;
+     (if satSolve(subst(BVAR, True, F)) =/= false then
+      genAssignments(VAL (BVAR |-> true), VAL2, subst(BVAR, True, F))
+      else emptyVS fi) .
+
+  eq genAssignments(VAL, emptyValuation, F) = VAL .
+
+  --- MAIN function:
+  op allAssignments : Valuation BoolExpression -> ValuationSet [memo] .
+  eq allAssignments(VAL, BE) = 
+        genAssignments(emptyValuation, VAL, beToFormula(BE)) .
+
+  op beToFormula : BoolExpression -> Formula .
+  eq beToFormula(BE1 and BE2) = beToFormula(BE1) /\ beToFormula(BE2) .
+  eq beToFormula(BE1 or BE2) = beToFormula(BE1) \/ beToFormula(BE2) .
+  eq beToFormula(not BE) = ~ beToFormula(BE) .
+  eq beToFormula(true) = True .
+  eq beToFormula(false) = False .
+  eq beToFormula(BVAR) = formula(BVAR) .
+endom)
+
+---(tomod TEST-FIND-VALS is
+  inc GENERATE-ENV-INPUTS .
+  ops a b c d e : -> BoolVarId .
+endtom)
+
+---(red allAssignments((a |-> false) (b |-> false)
+                             (c |-> false) (d |-> false), not a or not b) .)
+
+---(red allAssignments((a |-> false) (b |-> false)
+                    (c |-> false) (d |-> false), (not a or not b) and c) .)
+--- Seems to work just fine
+

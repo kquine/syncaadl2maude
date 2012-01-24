@@ -12,7 +12,7 @@ public class RtmPropCodeGenerator {
 		   .append("\n")
 		   .append("(tomod " + spec.getModel().getName() + "-VERIFICATION-DEF is \n")
 		   .append("  including " + RtmAadlUtil.escape(spec.getModel().getName()) + " .\n")
-		   .append("  including LTL-MODEL-CHECK-AADL .\n")
+		   .append("  including SIMPLE-COUNTEREXAMPLE .\n")
 		   .append("\n");
 		for (RtmPropertyDef pd : spec.getPropertyDefList())
 			res.append(RtmPropCodeGenerator.generateRtmEquation(pd,"  ")).append("\n");

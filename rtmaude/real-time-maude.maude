@@ -2588,7 +2588,7 @@ fmod VIEW is
   pr VIEW-EXPR .
   pr VIEW-MAP .
 
-  sorts View ViewHeader .
+  sort ViewHeader . --- View
   subsort ViewExp Header < ViewHeader .
   op view_from_to_is_endv : 
        ViewHeader ModuleExpression ModuleExpression Set{ViewMap} -> View 

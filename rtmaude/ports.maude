@@ -25,8 +25,10 @@ endom)
 
 (omod DATA-PORTS is including PORTS .
 
- op data : Bool -> MsgContent [ctor] .
- op data : Int -> MsgContent [ctor] .
+ sort DataMsgContent .
+ subsort DataMsgContent < MsgContent .
+ op data : Bool -> DataMsgContent [ctor] .
+ op data : Int -> DataMsgContent [ctor] .
 
  --- Ports are represented as objects ...
 
@@ -51,7 +53,7 @@ endom)    --- end PORTS
   ONLY because we know that we will never receive new data when 
   dispatched, we do not need this value to be frozen. However,
   we will need the 'fresh' flag:
-)*** 
+***)
 
 
 (omod THREAD-PORTS is 

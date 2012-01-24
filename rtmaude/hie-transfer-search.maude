@@ -1,5 +1,5 @@
 --- -------------
-*** Transfer data
+*** Transfer data & search functions
 --- -------------
 
 ***(  ******************
@@ -36,27 +36,26 @@ But let's first get the thing working.
 
 )*** *********************
 
-(omod TRANSFER-DATA is 
 
+(omod TRANSFER-DATA is 
  including BASIC-SORTS .      --- Definition of ConnectionSet
  including THREAD-PORTS .
  including COMPONENT .
  including THREAD .
 
+--- main function; frozen should not be needed.
  op transferData : Configuration -> Configuration [strat (1 0)] .
- --- main function; frozen should not be needed.
 
  vars C C1 C2 : ComponentId .
  vars P P1 P2 : PortId .
  var PN : PortName .
  vars PORTS PORTS2 OBJECTS : Configuration .
  vars MC MC' : MsgContent .
+ var DMC : DataMsgContent .
  var CONXS : ConnectionSet .
  vars REST COMPONENTS : Configuration .
- var I : Int .
- var B : Bool .
 
- op initializeTransfer : Configuration -> Configuration .
+ op initializeTransfer : Configuration -> Configuration . 
  --- better name for the above!
 
  eq transferData(COMPONENTS) = initializeTransfer(COMPONENTS) .
@@ -77,14 +76,9 @@ But let's first get the thing working.
   = < P : InDataThreadPort | fresh : false >
     initializeTransfer(PORTS) .
 
- eq initializeTransfer(< P : OutDataPort | content : data(I) >  
+ eq initializeTransfer(< P : OutDataPort | content : DMC >  
                        PORTS)
-  = < P : OutDataPort | content : transfer(data(I)) > 
-    initializeTransfer(PORTS) .
-
- eq initializeTransfer(< P : OutDataPort | content : data(B) >  
-                       PORTS)
-  = < P : OutDataPort | content : transfer(data(B)) > 
+  = < P : OutDataPort | content : transfer(DMC) > 
     initializeTransfer(PORTS) .
         
  eq initializeTransfer(REST) = REST [owise] .
@@ -118,7 +112,7 @@ But let's first get the thing working.
                           using ((P --> C1 . P1) ; CONXS)) > .
 
  op transfer_from_to_using_ : MsgContent PortName Configuration 
-                              ConnectionSet -> Configuration .
+                              ConnectionSet -> Configuration . 
 
  --- Notice 'InPort' here. Never connection to subcomponent . outport!
  eq transfer MC from PN to 
@@ -211,3 +205,57 @@ But let's first get the thing working.
 endom)
 
 
+--- Adds full path names and convenient functions
+--- to easily define search commands in a user-friendly way:
+
+(tomod SEARCH-FUNCTIONS is
+  including THREAD .
+
+  var O : Oid .  var PN : PathName .
+  vars SYSTEM REST REST2 PORTS : Configuration .
+  var IVAR : IntVarId .  var BVAR : BoolVarId .
+  var LOC : Location .  var LDS : LocationDeclSet .
+  var VAL : Valuation .  var TRANSES : TransitionSet .  var MC : MsgContent .
+  var I : Int .  var B : Bool .  var P : PortId .
+
+  --- locations of components:
+  op location`of`component_in_ : PathName Configuration ~> Location .
+
+  --- values of local transition system variables and port variables:
+  op value`of_in`component_in_ : IntVarId PathName Configuration ~> Int .
+  op value`of_in`component_in_ : BoolVarId PathName Configuration ~> Bool .
+
+  *** Notice that the following returns a MsgContent, not an Int or a Bool!
+  op value`of`port_in`component_in_ : PortId PathName Configuration ~> MsgContent .
+
+  eq location of component O in (< O : Thread | currState : LOC > REST) 
+   = LOC .
+
+  eq location of component (O -> PN) in (< O : Component | subcomponents : REST2 > REST) =
+     location of component PN in REST2 .
+
+  
+  eq value of IVAR in component O in (< O : Thread | variables : (IVAR |-> I) VAL >  REST) 
+    = I .
+
+  eq value of IVAR in component (O -> PN) in
+       (< O : Component | subcomponents : REST2 > REST)
+    = value of IVAR in component PN in REST2 .  
+
+  eq value of BVAR in component O in 
+       (< O : Thread | variables : (BVAR |-> B) VAL >  REST) 
+    = B .
+  
+  eq value of BVAR in component (O -> PN) in
+       (< O : Component | subcomponents : REST2 > REST)
+    = value of BVAR in component PN in REST2 .  
+
+  eq value of port P in component O in 
+       (< O : Thread | features : < P : Port | content : MC > PORTS >  REST) 
+    = MC .
+
+  eq value of port P  in component (O -> PN) in
+       (< O : Component | subcomponents : REST2 > REST)
+    = value of port P in component PN in REST2 .  
+
+endtom)

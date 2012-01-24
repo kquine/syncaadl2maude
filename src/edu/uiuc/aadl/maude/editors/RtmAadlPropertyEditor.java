@@ -130,6 +130,13 @@ public class RtmAadlPropertyEditor extends FormEditor implements IResourceChange
 				}            
 			});
 		}
+		else if (event.getType() == IResourceChangeEvent.POST_CHANGE)
+		{
+			// TODO: perform only for delta, not entire resource
+			event.getDelta();
+			String res = this.editor.getDocumentProvider().getDocument(this.editor.getEditorInput()).get();
+			this.controlPage.updateModel(res);
+		}
 	}
 
 }

@@ -36,6 +36,9 @@ import org.eclipse.ui.forms.widgets.Section;
 import org.w3c.dom.DOMException;
 import org.xml.sax.SAXException;
 
+import edu.cmu.sei.aadl.model.instance.SystemOperationMode;
+import edu.cmu.sei.aadl.model.instance.impl.SystemInstanceImpl;
+import edu.cmu.sei.aadl.model.util.SOMIterator;
 import edu.uiuc.aadl.maude.RtmAadlUtil;
 import edu.uiuc.aadl.maude.IO.CodegenFileManager;
 import edu.uiuc.aadl.maude.IO.PropertyFileManager;
@@ -43,6 +46,9 @@ import edu.uiuc.aadl.maude.codegen.RtmAadlModelUnparser;
 import edu.uiuc.aadl.maude.verification.RtmPropCodeGenerator;
 import edu.uiuc.aadl.maude.verification.RtmVerificationComm;
 import edu.uiuc.aadl.maude.verification.RtmVerificationSpec;
+import edu.uiuc.rtsi.synchaadlchecker.ConstraintChecker;
+import edu.uiuc.rtsi.synchaadlchecker.PropertyLoader;
+import edu.uiuc.rtsi.synchaadlchecker.SystemSwitch;
 import es.upv.dsic.issi.moment.maudesimpleGUI.MaudesimpleGUIPlugin;
 import es.upv.dsic.issi.moment.maudesimpleGUI.core.Maude;
 
@@ -59,6 +65,7 @@ public class ModelVerificationPage extends FormPage {
 	Text modelText = null;
 	Text simulText = null;
 	Table propTable = null;
+	Section propSec = null;
 	
 	/**
 	 * @param id
@@ -75,7 +82,7 @@ public class ModelVerificationPage extends FormPage {
 		toolkit.decorateFormHeading(form.getForm());
 		
 		Section modelSec = createModelSection(toolkit, form.getForm());
-		Section propSec = createPropertySection(toolkit, form.getForm());
+		this.propSec = createPropertySection(toolkit, form.getForm());
 		
 		//
 		//	Layout
@@ -87,7 +94,7 @@ public class ModelVerificationPage extends FormPage {
 		modelSec.setLayoutData(gd);
 		
 		gd = new GridData(GridData.FILL_HORIZONTAL);
-		propSec.setLayoutData(gd);	
+		this.propSec.setLayoutData(gd);	
 	}
 	
 	
@@ -98,11 +105,11 @@ public class ModelVerificationPage extends FormPage {
 		
 		Label modelLabel = toolkit.createLabel(modelSecCl, "Model Location:");
 		modelText = toolkit.createText(modelSecCl, "", SWT.BORDER);
-		//Button checkButton = toolkit.createButton(modelSecCl, "Constraints Check", SWT.PUSH);
+		Button checkButton = toolkit.createButton(modelSecCl, "Constraints Check", SWT.PUSH);
 		Button codegenButton = toolkit.createButton(modelSecCl, "Code Generation", SWT.PUSH);
-		Label simulLabel = toolkit.createLabel(modelSecCl, "Simulation Bound:");
+		toolkit.createLabel(modelSecCl, "Simulation Bound:");
 		simulText = toolkit.createText(modelSecCl, "");
-		Button simulButton = toolkit.createButton(modelSecCl, "Do Simulation", SWT.PUSH);
+		Button simulButton = toolkit.createButton(modelSecCl, "Perform Simulation", SWT.PUSH);
 		modelSec.setClient(modelSecCl);
 		
 		//
@@ -135,14 +142,43 @@ public class ModelVerificationPage extends FormPage {
 						}
 					}
 				});
+		checkButton.addSelectionListener(
+				new SelectionAdapter() {
+					public void widgetSelected(SelectionEvent e) {
+						SystemInstanceImpl system = (SystemInstanceImpl)ModelVerificationPage.this.spec.getModel();
+						ConstraintChecker checker = new ConstraintChecker();
+						if (checker.isSynchronous(system)) {
+							SOMIterator soms = new SOMIterator(system);
+							while (soms.hasNext()) {
+								SystemOperationMode som = soms.nextSOM();
+								system.setCurrentSystemOperationMode(som);
+								
+								SystemSwitch aSystemSwitch = new SystemSwitch(system, checker);
+								aSystemSwitch.defaultTraversal(system);
+								}
+							}
+						String outputString = checker.getErrorString();
+						
+						if (outputString.equals("Valid Synchronous AADL model!\n"))
+						{
+							MessageDialog.openInformation(ModelVerificationPage.this.getSite().getShell(), 
+									PropertyLoader.getString("CheckerAction.actionName"), 
+									outputString);
+							}
+						else
+						{
+							MessageDialog.openError(ModelVerificationPage.this.getSite().getShell(), 
+									PropertyLoader.getString("CheckerAction.actionName"), 
+									outputString);
+							}
+						}
+					});
 		simulButton.addSelectionListener(
 				new SelectionAdapter() {
 					public void widgetSelected(SelectionEvent e) {
 						try {
 							int val = Integer.parseInt(simulText.getText());
 							
-							
-							//FIXME: name, and path should be automatically detected!
 							Maude maude = MaudesimpleGUIPlugin.getDefault().getMaude();
 							
 							if (!maude.isRunning()) {
@@ -176,8 +212,7 @@ public class ModelVerificationPage extends FormPage {
 		modelText.setLayoutData(gd);
 		
 		gd = new GridData();
-		//gd.horizontalSpan = 2;
-		gd.horizontalSpan = 3;
+		gd.horizontalSpan = 2;
 		codegenButton.setLayoutData(gd);
 		
 		gd = new GridData(GridData.FILL_HORIZONTAL);
@@ -210,7 +245,7 @@ public class ModelVerificationPage extends FormPage {
 		column[2].setAlignment(SWT.CENTER);
 		
 		
-		Button verifyButton = toolkit.createButton(propSecCl, "Do Verification", SWT.PUSH);
+		Button verifyButton = toolkit.createButton(propSecCl, "Perform Verification", SWT.PUSH);
 		propSec.setClient(propSecCl);
 		
 		//
@@ -235,8 +270,8 @@ public class ModelVerificationPage extends FormPage {
 							Maude maude = MaudesimpleGUIPlugin.getDefault().getMaude(); 
 							if (!maude.isRunning()) {
 								maude.runMaude();
-								maude.sendToMaude("cd " + getCurrentPath() + "\n");
 							}
+							maude.sendToMaude("cd " + getCurrentPath() + "\n");
 							maude.sendToMaude("load " + cgFileName + "\n");
 							
 						}
@@ -269,6 +304,8 @@ public class ModelVerificationPage extends FormPage {
 		propSecCl.setLayout(layout);
 		
 		GridData gd = new GridData(GridData.FILL_HORIZONTAL);
+	    gd.minimumHeight = 60;
+	    gd.grabExcessVerticalSpace = true;
 		propTable.setLayoutData(gd);
 		
 		gd = new GridData(GridData.HORIZONTAL_ALIGN_END);
@@ -282,50 +319,57 @@ public class ModelVerificationPage extends FormPage {
 			getFile().getLocation().removeLastSegments(1).toOSString();
 	}
 	
-	protected void updateContent(String content) {
-		
-		final InputStream input = new ByteArrayInputStream(content.getBytes());
-		
+	protected void updateModel(String content) {
+		InputStream input = new ByteArrayInputStream(content.getBytes());
 		try {
-			spec = PropertyFileManager.readProp(input);
-			if (spec != null) {
-				modelText.setText(spec.getModel().eResource().getURI().devicePath().substring(9));
-				simulText.setText(spec.simulBound);
-				
-				int numItems = propTable.getItemCount();
-				int index = 0;
-				
-				for (RtmVerificationComm pc : spec.getCommandList()) {
-					TableItem item;
-					if (index < numItems) {
-						item = propTable.getItem(index++);
-					}
-					else
-						item = new TableItem(propTable, SWT.NONE);
-					
-					item.setText(0, pc.getName());
-					item.setText(1, pc.getPropertyString());
-					item.setText(2, "LTL");
-				}
-				if (index < numItems)
-					propTable.remove(index, numItems - 1);
-					
-				propTable.redraw();
-			}
-			else {
-				MessageDialog.openError(getSite().getShell(), "Spec Error!", "Error: No Instance Model");
-			}
-		} catch (IOException e) {
+			this.spec = PropertyFileManager.readProp(input);
+			if (this.spec != null)
+				this.modelText.setText(this.spec.getModel().eResource().getURI().devicePath().substring(9));
+		}
+		catch (IOException e) {
 			MessageDialog.openError(getSite().getShell(), "IO Error!", "Error: " + e.getMessage());
 			e.printStackTrace();
-		} catch (DOMException e) {
+		} 
+		catch (DOMException e) {
 			MessageDialog.openError(getSite().getShell(), "XML Error!", "Error: " + e.getMessage());
-		} catch (SAXException e) {
+		} 
+		catch (SAXException e) {
 			MessageDialog.openError(getSite().getShell(), "XML Parsing Error!", "Error: " + e.getMessage());
 			e.printStackTrace();
-		} catch (ParserConfigurationException e) {
+		} 
+		catch (ParserConfigurationException e) {
 			MessageDialog.openError(getSite().getShell(), "XML Parser Error!", "Error: " + e.getMessage());
 			e.printStackTrace();
 		}
 	}
+	
+	protected void updateContent(String content) {
+		updateModel(content);
+		if (this.spec != null)
+		{
+			this.simulText.setText(this.spec.simulBound);
+			
+			int numItems = this.propTable.getItemCount();
+			int index = 0;
+			
+			for (RtmVerificationComm pc : this.spec.getCommandList())
+			{
+				TableItem item;
+				if (index < numItems) {
+					item = this.propTable.getItem(index++);
+				}
+				else {
+					item = new TableItem(this.propTable, 0);
+				}
+				item.setText(0, pc.getName());
+				item.setText(1, pc.getPropertyString());
+				item.setText(2, "LTL");
+	        }
+			if (index < numItems) {
+				this.propTable.remove(index, numItems - 1);
+			}
+			this.propSec.pack();
+		}
+	}
+		
 }

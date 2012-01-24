@@ -1,11 +1,11 @@
  
-***( Attributes:
-       - features: a set of ports, inherited from Component
-       - subcomponents, mostly none, inherited from Component
-       - connection, inherited from Component
-       - properties: this is the dispatch policy, so far only periodic
-                     -- may also be input constraints
-)***
+ *** Attributes:
+ ***   - features: a set of ports, inherited from Component
+ ***   - subcomponents, mostly none, inherited from Component
+ ***   - connection, inherited from Component
+ ***   - properties: this is the dispatch policy, so far only periodic
+ ***                 -- may also be input constraints
+ ***
 
 --- Defines the basic class.
 (omod COMPONENT is 
@@ -32,6 +32,10 @@
   op none : -> Connection [ctor] .
   op _;_ : ConnectionSet ConnectionSet -> ConnectionSet
                                           [ctor assoc comm id: none] .
+
+--- a function that is used to structure for transfer
+ op transform : Configuration ~> Configuration [memo] .
+ eq transform(COMPS:Configuration) = COMPS:Configuration [owise] .
 
 endom)
 

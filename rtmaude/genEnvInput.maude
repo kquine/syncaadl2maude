@@ -64,7 +64,11 @@
   eq beToFormula(BVAR) = formula(BVAR) .
 endom)
 
----(tomod TEST-FIND-VALS is
+*** END OF FILE
+
+eof
+
+tomod TEST-FIND-VALS is
   inc GENERATE-ENV-INPUTS .
   ops a b c d e : -> BoolVarId .
 endtom)

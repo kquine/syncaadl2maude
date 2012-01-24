@@ -65,24 +65,23 @@
   --- Behaviro actions!!
   --- ----------------------
 
-  ***(
-   The behavior actions that the transitions execute are either a set
-   or a sequence of actions. Since we target deterministic
-   threads, we do not consider sets of actios at the moment. 
+  
+  *** The behavior actions that the transitions execute are either a set
+  *** or a sequence of actions. Since we target deterministic
+  *** threads, we do not consider sets of actios at the moment. 
 
-   Basic actions are assignment of values to variables/ports,
-   and explicit sending of ports, which we do not consider here,
-   since we have a fixed communication pattern in Synch AADL. 
+  *** Basic actions are assignment of values to variables/ports,
+  *** and explicit sending of ports, which we do not consider here,
+  *** since we have a fixed communication pattern in Synch AADL. 
 
-   There are also two basic timing features. A sequence of behaviors
-   may have a timeout. Since we assume instantaneous exeuction,
-   we do not consider this. Also, there is the computation[r1, r2]
-   action, which we also do not consider for the same reason. 
-
-   We then have the if_elseif*_else_? action, with zero or more 
-   elseif's and zero or one else-branch, as well as the usual while
-   action.  
-  )***
+  *** There are also two basic timing features. A sequence of behaviors
+  *** may have a timeout. Since we assume instantaneous exeuction,
+  *** we do not consider this. Also, there is the computation[r1, r2]
+  *** action, which we also do not consider for the same reason. 
+  ***
+  *** We then have the if_elseif*_else_? action, with zero or more 
+  *** elseif's and zero or one else-branch, as well as the usual while
+  *** action.  
 
   sort Statement .
   op _:=_ : IntVarId IntExpression -> Statement [ctor] .
@@ -172,6 +171,10 @@ endom)
   op __ : LocationSet LocationSet -> LocationSet 
                      [ctor assoc comm id: emptyLocationSet] .
 
+  op _in_ : Location LocationSet -> Bool .
+  eq L in L LS = true .
+  eq L in LS = false [owise] .
+
   *** NEW, to accomodate Artur!
   sorts LocationDecl LocationDeclSet .
   subsort LocationDecl < LocationDeclSet .
@@ -203,19 +206,17 @@ endom)
   --- GUARDS for transitions
   --- --------------------------------
 
-  ***( 
-   This is significantly changed from version 1 of the BehAnnex.
-   Transitions out of complete states have dispatch-conditions,
-   which typically is a condition on how the thread was dispatched,
-   'on dispatch p' or 'on dispatch timeout', etc. Since we assume
-   in the synchronous AADL that we only have periodic threads,
-   these dispatch conditions are fairly void, e.g., only
-   'on dispatch'.
-      The conditions on transitions going from non-complete,
-   so-called execution, states are now basically just Boolean
-   expressions with some additional stuff. We might well include
-   'otherwise' here, even though it will cause us some problems. 
-  )*** 
+  *** This is significantly changed from version 1 of the BehAnnex.
+  *** Transitions out of complete states have dispatch-conditions,
+  *** which typically is a condition on how the thread was dispatched,
+  *** 'on dispatch p' or 'on dispatch timeout', etc. Since we assume
+  *** in the synchronous AADL that we only have periodic threads,
+  *** these dispatch conditions are fairly void, e.g., only
+  *** 'on dispatch'.
+  ***    The conditions on transitions going from non-complete,
+  *** so-called execution, states are now basically just Boolean
+  *** expressions with some additional stuff. We might well include
+  *** 'otherwise' here, even though it will cause us some problems. 
 
 
   sort TransGuard .

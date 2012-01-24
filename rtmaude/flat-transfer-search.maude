@@ -1,0 +1,228 @@
+
+
+--- connection instances that will be used in the flat structure
+(tomod CONNECTION-INSTANCE is
+  including COMPONENT .
+
+  --- flattened connection instances
+  sort ConnectionInst .
+  subsort ConnectionInst < NEConfiguration .
+  op `{_-->_`} : PortName PortName -> ConnectionInst .
+
+  vars CF : Configuration . var NCF : NEConfiguration .
+  var CX : ConnectionSet . var CI : ConnectionInst .  
+  vars PN1 PN2 PN3 : PortName .  
+
+  --- connecting connection instances
+  op linkConn : Configuration ~> Configuration .
+  eq linkConn({PN1 --> PN2} {PN2 --> PN3} CF)
+   = linkConn(allLink({PN1 --> PN2}, {PN2 --> PN3} CF)) .
+  eq linkConn(CF) = CF [owise] .
+
+  op allLink : ConnectionInst Configuration ~> Configuration .
+  eq allLink({PN1 --> PN2}, {PN2 --> PN3} CF)
+   = {PN1 --> PN3} allLink({PN1 --> PN2}, CF) .
+  eq allLink(CI, CF) = CF [owise] .
+endtom)
+
+--- flatten the hierarchical structures, creating connection instances
+(tomod FLATTENED-STRUCTURE is
+  including CONNECTION-INSTANCE .
+  including DATA-PORTS .
+  including PATH-NAME .
+  including COMPONENT-REF .
+
+  vars CF : Configuration . var NCF : NEConfiguration .
+  var CX : ConnectionSet .  var CLASS : Cid . var ATTRS : AttributeSet . 
+  vars C C1 C2 : ComponentId . vars P1 P2 : PortId .
+  vars PN1 PN2 PN3 : PortName .  vars PH1 PH2 : PathName .
+
+--- hierarchical comp id and port name
+  op `[_`] : PathName -> ComponentId [ctor] .
+  eq [PH1] -> [PH2] = [PH1 -> PH2] .
+  eq [PH1] -> ([PH2] . P1) = [PH1 -> PH2] . P1 .
+  eq [PH1] -> P1 = [PH1] . P1 .
+
+  op `[_`] : PortName ~> PortName .
+  eq [C1 . P1] = [C1] . P1 .
+  eq [P1]      = P1 .
+
+--- remove the top-level name which is not usually interested.
+--- this function should be only used for counterexample generation
+  op trim : ComponentId ~> ComponentId .
+ ceq trim([C -> PH1]) = [PH1] if C == MAIN .
+  eq trim(C) = C [owise] .
+
+--- flatten components: the main function
+  op flatten : Configuration ~> Configuration .
+  eq flatten(< C1 : Component | subcomponents : NCF, connections : CX > CF)
+   = upLevel(C1, linkConn(flatten(NCF) connInst(CX))) flatten(CF) .
+  eq flatten(< C1 : CLASS | subcomponents : none, ATTRS > CF) 
+   = flatten(CF) < [C1] : CLASS | subcomponents : none, ATTRS > flatten(CF) .
+  eq flatten(none) = none .
+
+--- up components one level
+  op upLevel : PathName Configuration ~> Configuration .
+  eq upLevel(PH1, < [PH2] : CLASS | ATTRS > CF)
+   = < [PH1 -> PH2] : CLASS | ATTRS > upLevel(PH1, CF) .
+  eq upLevel(PH1, {PN1 --> PN2} CF)
+   = {[PH1] -> PN1 --> [PH1] -> PN2} upLevel(PH1, CF) .
+  eq upLevel(C1, none) = none .
+
+--- create connection instances
+  op connInst : ConnectionSet ~> Configuration .
+  eq connInst((PN1 -->  PN2) ; CX) = {[PN1] --> [PN2]} connInst(CX) .
+  eq connInst((PN1 -->> PN2) ; CX) = {[PN1] --> [PN2]} connInst(CX) .
+  eq connInst(none) = none .
+endtom)
+
+--- in order to speed up the msg transfer process, we added the target 
+--- information into output ports, that would be natural in the flat structure.
+(omod COLLAPSED-FLATTENED-CONNECTION is
+  inc FLATTENED-STRUCTURE .
+
+  class ConnOutDataPort | targets : PortNameSet .
+  subclass ConnOutDataPort < OutDataPort .
+
+  vars P1 P2 : PortId .  var PN : PortName . var PNS : PortNameSet .  
+  vars PORTS PORTS2 REST : Configuration . vars C1 C2 : ComponentId .  
+  var MC : MsgContent .  
+
+  sorts PortNameSet NEPortNameSet . 
+  subsort PortName < NEPortNameSet < PortNameSet .
+  op empty : -> PortNameSet [ctor] .
+  op _;_ : PortNameSet PortNameSet -> PortNameSet [ctor assoc comm id: empty] .
+  op _;_ : NEPortNameSet PortNameSet -> NEPortNameSet [ditto] .
+  op _;_ : PortNameSet NEPortNameSet -> NEPortNameSet [ditto] .
+
+--- collapse connection instances in a flattened structure
+--- to optimize the msg transfer process.
+  op collapse : Configuration ~> Configuration .
+  eq collapse(
+       {C1 . P1 --> C2 . P2}
+       < C1 : Component | features : < P1 : OutDataPort | > PORTS > 
+       < C2 : Component | features : < P2 : InDataPort | > PORTS2 > REST)
+   = collapse(
+       < C1 : Component | 
+           features : addDest(C2 . P2, < P1 : OutDataPort | >) PORTS > 
+       < C2 : Component | > REST) .
+  eq collapse(REST) = REST [owise] .
+
+  op addDest : PortName Object ~> Object .
+  eq addDest(PN, < P1 : ConnOutDataPort | targets : PNS >)
+   = < P1 : ConnOutDataPort | targets : PNS ; PN > .
+  eq addDest(PN, < P1 : OutDataPort | content : MC >)
+   = < P1 : ConnOutDataPort | content : MC, targets : PN > [owise] .
+endom)
+
+--- -------------
+*** Transfer data for flattened structures
+--- -------------
+
+(omod TRANSFER-DATA is 
+  including THREAD .
+  including COLLAPSED-FLATTENED-CONNECTION .
+  
+  vars PORTS CONF REST : Configuration .  var DMC : DataMsgContent . 
+  var C : ComponentId . var P : PortId . 
+  var PN : PortName . vars NPNS NPNS2 : NEPortNameSet . 
+
+--- transform to the flatten & collapsed structure
+  eq transform(CONF) = collapse(flatten(CONF)) .
+  
+--- main function; frozen should not be needed.
+  op transferData : Configuration ~> Configuration .
+  eq transferData(CONF) = initiateTransfer(CONF) .
+  
+--- initiate transfer
+  op initiateTransfer : Configuration ~> Configuration .
+  eq initiateTransfer(< C : Component | features : PORTS > REST)
+   = < C : Component | features : clearPorts(PORTS) > genOutData(PORTS) 
+     initiateTransfer(REST) .
+  eq initiateTransfer(REST) = REST [owise] .
+
+--- clear input data ports
+  op clearPorts : Configuration ~> Configuration .
+  eq clearPorts(< P : InDataThreadPort | > PORTS)
+   = < P : InDataThreadPort | fresh : false > clearPorts(PORTS) .
+  eq clearPorts(PORTS) = PORTS [owise] .
+
+--- output data messages
+  op genOutData : Configuration ~> Configuration .
+  eq genOutData(< P : ConnOutDataPort | content : DMC, targets : NPNS > REST) 
+   = (output DMC to NPNS) genOutData(REST) .
+  eq genOutData(REST) = none [owise] .
+
+--- transfer messages
+  msg output_to_ : DataMsgContent PortName -> Msg .
+
+  eq output DMC to NPNS ; NPNS2 = (output DMC to NPNS) (output DMC to NPNS2) .
+
+  eq (output DMC to C . P) < C : Component | features : PORTS > 
+   = < C : Component | features : (output DMC to P) PORTS > .
+
+  eq (output DMC to P) < P : InDataPort | >
+   = fresh(< P : InDataPort | content : DMC >) .
+
+--- set fresh flag true
+  op fresh : Object ~> Object .
+  eq fresh(< P : InDataThreadPort | >)
+   = < P : InDataThreadPort | fresh : true > .
+  eq fresh(PORT:Object) = PORT:Object [owise] .
+
+--- transfer data using connection instances (DEPRECATED)
+---(
+  eq transferData(CONF) = transfer(initPorts(CONF)) .
+  
+  op initPorts : Configuration ~> Configuration .
+  eq initPorts(< C : Component | features : PORTS > REST)
+   = < C : Component | features : clearPorts(PORTS) > initPorts(REST) .
+  eq initPorts(REST) = REST [owise] .
+
+  op transfer : Configuration ~> Configuration .
+  eq transfer(
+      {C1 . P1 --> C2 . P2}
+      < C1 : Component | features : < P1 : OutDataPort | content : DMC > PORTS >
+      < C2 : Component | features : < P2 : InDataPort | > PORTS2 > REST)
+   = {C1 . P1 --> C2 . P2}
+     transfer(
+      < C1 : Component | features : < P1 : OutDataPort | > PORTS >
+      < C2 : Component | 
+          features : fresh(< P2 : InDataPort | content : DMC >) PORTS2 > REST) .
+  eq transfer(CONF) = CONF [owise] .
+---)
+endom)
+
+
+--- -------------
+*** search functions for flattened structures
+--- -------------
+
+(tomod SEARCH-FUNCTIONS is
+  including THREAD .
+  including FLATTENED-STRUCTURE .
+
+  var P : PortId .  var PH : PathName .  vars REST PORTS : Configuration .
+  var IVAR : IntVarId .  var BVAR : BoolVarId .  var I : Int .  var B : Bool .  
+  var VAL : Valuation .  var MC : MsgContent .  var LOC : Location . 
+
+  --- locations of components:
+  op location`of`component_in_ : PathName Configuration ~> Location .
+  eq location of component PH in (< [PH] : Thread | currState : LOC > REST) 
+   = LOC .
+
+  --- values of local transition system variables and port variables:
+  op value`of_in`component_in_ : IntVarId PathName Configuration ~> Int .
+  eq value of IVAR in component PH in 
+       (< [PH] : Thread | variables : (IVAR |-> I) VAL >  REST) = I .
+
+  op value`of_in`component_in_ : BoolVarId PathName Configuration ~> Bool .
+  eq value of BVAR in component PH in 
+       (< [PH] : Thread | variables : (BVAR |-> B) VAL >  REST) = B .
+
+  *** Notice that the following returns a MsgContent, not an Int or a Bool!
+  op value`of`port_in`component_in_ : PortId PathName Configuration ~> MsgContent .
+  eq value of port P in component PH in 
+       (< [PH] : Thread | features : < P : Port | content : MC > PORTS >  REST) 
+    = MC .
+endtom)

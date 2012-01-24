@@ -1,89 +1,11 @@
 
---- Adds full path names and convenient functions
---- to easily define search commands in a user-friendly way:
-
-(tomod SEARCH-FUNCTIONS is
-  pr SYNCHRONOUS-STEP .
-
-  var PN : PathName .
-  vars SYSTEM REST REST2 PORTS : Configuration .
-  var IVAR : IntVarId .
-  var BVAR : BoolVarId .
-  var O : Oid .
-  var LOC : Location .
-  var LDS : LocationDeclSet .
-  var VAL : Valuation .
-  var TRANSES : TransitionSet .
-  var I : Int .
-  var B : Bool .
-  var P : PortId .
-  var MC : MsgContent .
-
-  --- global path names:
-  sort PathName .
-  subsort Oid < PathName .
-  op _->_ : PathName PathName -> PathName [ctor assoc] .
-
-  --- locations of components:
-  op location`of`component_in_ : PathName Configuration ~> Location .
-  --- and why not:
-  op location`of`component_in_ : PathName GlobalSystem ~> Location .
-  eq location of component PN in {SYSTEM} = location of component PN in SYSTEM .
-
-  --- values of local transition system variables and port variables:
-  op value`of_in`component_in_ : IntVarId PathName Configuration ~> Int .
-  op value`of_in`component_in_ : BoolVarId PathName Configuration ~> Bool .
-  --- and for global systems:
-  op value`of_in`component_in_ : IntVarId PathName GlobalSystem ~> Int .
-  op value`of_in`component_in_ : BoolVarId PathName GlobalSystem ~> Bool .
-  eq value of IVAR in component PN in {SYSTEM} = 
-       value of IVAR in component PN in SYSTEM .  
-  eq value of BVAR in component PN in {SYSTEM} = 
-       value of BVAR in component PN in SYSTEM .  
-
-  *** Notice that the following returns a MsgContent, not an Int or a Bool!
-  op value`of`port_in`component_in_ : PortId PathName GlobalSystem ~> MsgContent .
-  op value`of`port_in`component_in_ : PortId PathName Configuration ~> MsgContent .
-  eq value of port P in component PN in {SYSTEM} = value of port P in component PN in SYSTEM .  
-
-  eq location of component O in (< O : Thread | currState : LOC > REST) 
-   = LOC .
-
-  eq location of component (O -> PN) in (< O : Component | subcomponents : REST2 > REST) =
-     location of component PN in REST2 .
-
-  
-  eq value of IVAR in component O in (< O : Thread | variables : (IVAR |-> I) VAL >  REST) 
-    = I .
-
-  eq value of IVAR in component (O -> PN) in
-       (< O : Component | subcomponents : REST2 > REST)
-    = value of IVAR in component PN in REST2 .  
-
-  eq value of BVAR in component O in 
-       (< O : Thread | variables : (BVAR |-> B) VAL >  REST) 
-    = B .
-  
-  eq value of BVAR in component (O -> PN) in
-       (< O : Component | subcomponents : REST2 > REST)
-    = value of BVAR in component PN in REST2 .  
-
-  eq value of port P in component O in 
-       (< O : Thread | features : < P : Port | content : MC > PORTS >  REST) 
-    = MC .
-
-  eq value of port P  in component (O -> PN) in
-       (< O : Component | subcomponents : REST2 > REST)
-    = value of port P in component PN in REST2 .  
-
-endtom)
-
 --- Adds some standard atomic propositions to make
 --- LTL model checking possibl without knowing the
 --- Real-Time Maude representation of an AADL model.
 
 (tomod LTL-MODEL-CHECK-AADL is 
   inc SEARCH-FUNCTIONS .
+  pr SYNCHRONOUS-STEP .
   inc TIMED-MODEL-CHECKER .
 
   op value`of_in`component_is_ : BoolVarId PathName Bool -> Prop [ctor] .
@@ -93,26 +15,70 @@ endtom)
   op _@_ : PathName Location -> Prop .
 
   var SYSTEM : Configuration .
-  var BVAR : BoolVarId .
-  var B : Bool .
-  var IVAR : IntVarId .
-  var I : Int .
-  var L : Location .
-  var PN : PathName .
-  var P : PortId .
+  var BVAR : BoolVarId .  var IVAR : IntVarId .  var B : Bool .  var I : Int .
+  var PN : PathName .  var P : PortId .  var L : Location .
 
-  eq {SYSTEM} |= value of BVAR in component PN is B =
-        (B == value of BVAR in component PN in SYSTEM) .
+  eq {SYSTEM} |= value of BVAR in component PN is B 
+   = (B == value of BVAR in component PN in SYSTEM) .
 
-  eq {SYSTEM} |= value of IVAR in component PN is I =
-        (I == value of IVAR in component PN in SYSTEM) .
+  eq {SYSTEM} |= value of IVAR in component PN is I 
+   = (I == value of IVAR in component PN in SYSTEM) .
 
-  eq {SYSTEM} |= PN @ L =
-        (L == location of component PN in SYSTEM) .
+  eq {SYSTEM} |= PN @ L 
+   = (L == location of component PN in SYSTEM) .
 
-  eq {SYSTEM} |= value of P in component PN is I =
-        (data(I) == value of port P in component PN in SYSTEM) .
+  eq {SYSTEM} |= value of P in component PN is I 
+   = (data(I) == value of port P in component PN in SYSTEM) .
 
-  eq {SYSTEM} |= value of P in component PN is B =
-        (data(B) == value of port P in component PN in SYSTEM) .
+  eq {SYSTEM} |= value of P in component PN is B 
+   = (data(B) == value of port P in component PN in SYSTEM) .
 endtom)
+
+
+(omod SIMPLE-COUNTEREXAMPLE is 
+  including LTL-MODEL-CHECK-AADL .
+
+--- simplified counter example information
+  sorts CounterExampleItem CounterExampleItemSet .
+  subsort CounterExampleItem < CounterExampleItemSet .
+  op none : -> CounterExampleItemSet [ctor] .
+  op __ : CounterExampleItemSet CounterExampleItemSet -> CounterExampleItemSet
+				    [ctor comm assoc id: none format(d ni d)] .
+
+  op _->`[_`] : ComponentId CounterExampleItemSet -> CounterExampleItem 
+		[ctor format(r o d n++i d n--i)] .
+  op variables : Valuation -> CounterExampleItem [ctor] .
+  op features : Configuration -> CounterExampleItem [ctor] .
+
+--- new counterexample transition
+  op `{_`,_`} : CounterExampleItemSet RuleName -> Transition [ctor] .
+
+  vars OBJECT : Object .  vars SYSTEM REST PORTS COMPS : Configuration . 
+  var VAL : Valuation .  var C : ComponentId . 
+  
+--- simplify
+  op simplify : Configuration ~> CounterExampleItemSet .
+  eq simplify(< C : Component | > REST)
+   = (trim(C) ->[ simplify-sub(< C : Component | >)
+                  simplify-thread(< C : Component | >) ]) 
+     simplify(REST) .
+  eq simplify(REST) = none [owise] .
+
+--- simplify cases
+  op simplify-sub : Object ~> CounterExampleItemSet .
+  eq simplify-sub(< C : Component | subcomponents : COMPS >) 
+   = simplify(COMPS) .
+
+  op simplify-thread : Object ~> CounterExampleItem .
+  eq simplify-thread(< C : Thread | variables : VAL, features : PORTS >)
+   = variables(VAL) 
+     --- features(PORTS) 
+     .
+  eq simplify-thread(OBJECT) = none [owise] .
+
+--- simplify transition
+  eq {{SYSTEM},R:RuleName}
+   = {simplify(SYSTEM),R:RuleName} .
+endom)
+
+

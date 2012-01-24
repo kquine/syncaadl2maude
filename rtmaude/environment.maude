@@ -1,0 +1,59 @@
+
+(omod ENVIRONMENT-HANDLING is
+  including EXT-BOOL .
+  including SYSTEM .
+  including PROCESS .
+  including THREAD .
+  including AADL-PROPERTIES .
+  including GENERATE-ENV-INPUTS .
+
+  vars PORTS COMPS REST : Configuration .  
+  var O : Oid .  vars VAL : Valuation .  vars PS : Properties .
+  var BE : BoolExpression .  var BVAR : BoolVarId .  var B : Bool .
+
+--- true if environment
+  op environmentThread : Properties -> Bool .
+  eq environmentThread(IsEnvironment(true) ; PS) = true .
+  eq environmentThread(PS) = false [owise] .
+
+--- check whether there is an environment thread
+  op containsEnvironment : Configuration -> Bool .
+  eq containsEnvironment(< O : System | subcomponents : COMPS > REST)
+   = containsEnvironment(COMPS) or-else containsEnvironment(REST) .
+  eq containsEnvironment(< O : Process | subcomponents : COMPS > REST)     
+   = containsEnvironment(COMPS) or-else containsEnvironment(REST) .
+  eq containsEnvironment(< O : Thread | properties : PS > REST) 
+   = environmentThread(PS) or-else containsEnvironment(REST) .
+  eq containsEnvironment(REST) = false [owise] .
+
+--- assumes ONE environment!
+  op getEnvironment : Configuration ~> Object .
+  eq getEnvironment(< O : System | subcomponents : COMPS > REST)
+   = if containsEnvironment(COMPS) then getEnvironment(COMPS)
+     else getEnvironment(REST) fi .
+  eq getEnvironment(< O : Process | subcomponents : COMPS > REST)
+   = if containsEnvironment(COMPS) then getEnvironment(COMPS)
+     else getEnvironment(REST) fi .
+  eq getEnvironment(< O : Thread | properties : IsEnvironment(true) ; PS > REST)
+   = < O : Thread | > .
+  eq getEnvironment(REST) = none [owise] .
+
+  *** A main function, that gives all the possible assignments in a system:
+  op allEnvAssignments : Configuration ~> ValuationSet .
+
+  eq allEnvAssignments(COMPS) 
+   = allEnvAssignments(getEnvironment(COMPS)) [owise] .
+
+  eq allEnvAssignments(
+      < O : Thread | 
+         properties : IsEnvironment(true) ; InputConstraints(BE) ; PS, 
+         variables : VAL >)
+   = allAssignments(initializeToFalse(VAL), BE) .
+
+  op initializeToFalse : Valuation ~> Valuation .
+  eq initializeToFalse((BVAR |-> B) VAL) 
+   = (BVAR |-> false) initializeToFalse(VAL) .
+  eq initializeToFalse(VAL) = VAL [owise] .
+
+  *** Maybe we should memo the whole thing as a constant? If we have a fixed init state, fine!
+endom)

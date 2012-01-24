@@ -4,13 +4,9 @@
   including APPLY-ENV-TRANS .
   including TRANSFER-DATA .
 
-  vars SYSTEM OBJ : Object .     
-  var VAL : Valuation . 
-  var VALS : ValuationSet .
-  var NZT : NzTime .
-  var O : Oid .
-  var PROPS : Properties .
-  var COMPONENTS CONF : Configuration .
+  var O : Oid . vars OBJ : Object .  var NZT : NzTime .
+  var SYSTEM COMPS : Configuration .  var NCONF : NEConfiguration .
+  var VAL : Valuation .  var VALS : ValuationSet .  var PROPS : Properties .
 
 
 ---
@@ -31,22 +27,21 @@
      if not containsEnvironment(SYSTEM) .
 ---
 
-  op period : Configuration -> Time .
   --- We assume that all perids are the same, but it period may be declared
   --- in different places, either explicitly at the top level, or impicitly
   --- by the period in some thread.  
+  op period : Configuration -> Time .
   eq period(< O : Component | properties : syncPeriod(NZT) ; PROPS >) = NZT .
-  eq period(< O : Thread | properties : periodic-dispatch(NZT) ; PROPS >) = NZT .
-  eq period(< O : Component | subcomponents : COMPONENTS >) =
-       period(COMPONENTS) [owise] .
-  ceq period(OBJ CONF) = if period(OBJ) == 0 then period(CONF) else period(OBJ) fi 
-         if CONF =/= none .
-  eq period(none) = 0 .   --- default value
+  eq period(< O : Thread | properties : periodic-dispatch(NZT); PROPS >) = NZT .
+  eq period(< O : Component | subcomponents : COMPS >) = period(COMPS) [owise] .
+  eq period(OBJ NCONF) 
+   = if period(OBJ) == 0 then period(NCONF) else period(OBJ) fi .
+  eq period(COMPS) = 0 [owise] .   --- default value
 
 
-  *** Although the above are the most correct rules, in the present fragment we might
-  *** disregard from the actual periods, since they are constants anyways; this also
-  *** saves the longer 'period(SYSTEM)' computations:
+  *** Although the above are the most correct rules, in the present fragment 
+  *** we might disregard from the actual periods, since they are constants 
+  *** anyways; this also saves the longer 'period(SYSTEM)' computations:
 
  ---(
   crl [syncStepWithTimeNoTime] :

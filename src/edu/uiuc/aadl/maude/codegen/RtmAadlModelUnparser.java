@@ -97,9 +97,9 @@ public class RtmAadlModelUnparser extends AadlProcessingSwitch {
 			
 			// the initial state
 			aadlText.addOutputNewline("--- the initial state");
-			aadlText.addOutputNewline("op initial : -> Configuration .");
+			aadlText.addOutputNewline("op initial : -> Configuration [memo] .");
 			if (root instanceof ComponentInstance) {
-				aadlText.addOutputNewline(String.format("eq initial = %s : %s .",
+				aadlText.addOutputNewline(String.format("eq initial = transform(%s : %s) .",
 						modelName, getComponentDeclName((ComponentInstance)root)));
 				aadlText.addOutputNewline("eq MAIN = " + modelName + " .");
 			}
